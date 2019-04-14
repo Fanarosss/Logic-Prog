@@ -3,17 +3,17 @@
 % Used Eclipse for the implementation
 
 
-% we know the set S, the sum of the starting set S is twice the set of the subsets
+% we know the set S -> the sum of the starting set S is twice the set of the subsets
 % since the subsets S1 and S2 have the same number of elements and the same sum
-% so if we compute the sum of S (only one time at the beginning)
-% and divide it by two we can find Sx (sum) and Sxx (sum of squared).
+% if we compute the sum of S (only one time at the beginning) and divide it by two
+% we can find the desired Sx (sum) and Sxx (sum of squared) of the subsets.
 
 % I use alldifferent which demands a certain complexity, but I will be sure that all elements
-% will be unique on both lists. So I can use this information,
+% are unique on both lists. So I can use this information,
 % to avoid setting any further constraints for the second subset.
 
-% So having unique elements with alldifferent, I can be sure of a solution, by only
-% looking at the sum of subset S1.
+% So having unique elements with alldifferent, I can be sure of a solution, just by
+% looking at the sums (Sx and Sxx) of subset S1.
 
 % I use S2 at the recursion just to ensure that:
 %    elements are sorted -> avoid duplicate solutions
