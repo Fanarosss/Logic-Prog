@@ -5,7 +5,7 @@
 :- lib(ic).
 :- lib(branch_and_bound).
 
-% takis code for generating sequences
+% given code in order to create formula
 create_formula(NVars, NClauses, Density, Formula) :-
    formula(NVars, 1, NClauses, Density, Formula).
 
@@ -35,8 +35,11 @@ one_clause(V, NVars, Density, Clause) :-
 rand(N1, N2, R) :-
    random(R1),
    R is R1 mod (N2 - N1 + 1) + N1.
-% end of takis code
+% end of given code
 
+% function that goes over the list to put a constrain
+% on the binary variable S, and returning the constrain,
+% 1 for true, 0 for false
 find_value(_, [], 0).
 find_value(Term, Index, [_|Rest], R) :-
   Term > 0,
@@ -65,12 +68,17 @@ find_value(Term, Index, [CS|_], 0) :-
   Term < 0,
   CS #= 1.
 
+% optimization function in order to call find_value
+% only one time at evaluate_term (and not two if the V constrain fails)
 decide(Rest, S, V, Value) :-
   V #= 0,
   evaluate_term(Rest, S, Value).
 decide(_, _, V, V) :-
   V #= 1.
 
+% evaluate the proposition, whether it can be true
+% at first true term it stops and goes back
+% if all terms are false -> proposition is false -> cost is incremented
 evaluate_term([], _, 0).
 evaluate_term([Term|Rest], S, Value) :-
   find_value(Term, 1, S, V),
@@ -82,6 +90,7 @@ set_cost(Value, CurrM, NewM) :-
   Value #= 0,
   NewM #= CurrM + 1.
 
+% evaluating the propositions
 proposition_calc([], _, M, M).
 proposition_calc([CF|Rest], S, CurrM, M) :-
   evaluate_term(CF, S, Value),
