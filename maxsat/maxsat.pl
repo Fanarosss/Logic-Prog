@@ -48,38 +48,44 @@ find_value(Term, Index, [_|Rest], R) :-
   Term \= -1*Index,
   IncIndex is Index + 1,
   find_value(Term, IncIndex, Rest, R).
-find_value(Term, Index, [CS|_], CS) :-
-  Term > 0,
-  Term =:= Index.
 find_value(Term, Index, [CS|_], 1) :-
-  Term < 0,
+  Term =:= Index,
+  Term > 0,
+  CS #= 1.
+find_value(Term, Index, [CS|_], 0) :-
+  Term =:= Index,
+  Term > 0,
+  CS #= 0.
+find_value(Term, Index, [CS|_], 1) :-
   Term =:= -1*Index,
+  Term < 0,
   CS #= 0.
 find_value(Term, Index, [CS|_], 0) :-
-  Term < 0,
   Term =:= -1*Index,
+  Term < 0,
   CS #= 1.
 
-evaluate_term([], _, 0).
-evaluate_term([Term|RestTerms], S, Value) :-
-  find_value(Term, 1, S, V),
+decide(Rest, S, V, Value) :-
   V #= 0,
-  evaluate_term(RestTerms, S, Value).
-evaluate_term([Term|_], S, Value) :-
-  find_value(Term, 1, S, Value),
-  Value #= 1.
+  evaluate_term(Rest, S, Value).
+decide(_, _, V, V) :-
+  V #= 1.
 
-evaluate_prop(CF, S, CurrM, CurrM) :-
-  evaluate_term(CF, S, Value),
+evaluate_term([], _, 0).
+evaluate_term([Term|Rest], S, Value) :-
+  find_value(Term, 1, S, V),
+  decide(Rest, S, V, Value).
+
+set_cost(Value, CurrM, CurrM) :-
   Value #= 1.
-evaluate_prop(CF, S, CurrM, NewM) :-
-  evaluate_term(CF, S, Value),
+set_cost(Value, CurrM, NewM) :-
   Value #= 0,
   NewM #= CurrM + 1.
 
-proposition_calc([], _, CurrM, CurrM).
+proposition_calc([], _, M, M).
 proposition_calc([CF|Rest], S, CurrM, M) :-
-  evaluate_prop(CF, S, CurrM, NewM),
+  evaluate_term(CF, S, Value),
+  set_cost(Value, CurrM, NewM),
   proposition_calc(Rest, S, NewM, M).
 
 % NV variables
@@ -90,10 +96,10 @@ proposition_calc([CF|Rest], S, CurrM, M) :-
 % M num of true propositions
 maxsat(NV, NC, D, F, S, M) :-
   create_formula(NV, NC, D, F),
-  length(S, NV),
+  length(S, NV),% variable logical domain
   S #:: 0..1,
   % Cost is the number of false propositions
   % -> optimizing the number of falses ->
   % means we have the most true propositions
-  bb_min(proposition_calc(F, S, 0, Cost), Cost, bb_options{strategy:restart}),
+  bb_min(proposition_calc(F, S, 0, Cost), Cost, bb_options{strategy:restart, from:0}),
   M is NC - Cost.
