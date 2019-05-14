@@ -37,6 +37,27 @@ rand(N1, N2, R) :-
    R is R1 mod (N2 - N1 + 1) + N1.
 % end of given code
 
+% comparing list length
+longer_than(X,Y) :-
+  length(X,Xlen),
+  length(Y,Ylen),
+  Xlen > Ylen.
+
+%quicksort for sorting a list of lists of lists lengths
+sort_by_len([], []).
+sort_by_len([X|Tail], Sorted) :-
+  split(X, Tail, Small, Big),
+  sort_by_len(Small, SortedSmall),
+  sort_by_len(Big, SortedBig),
+  append(SortedSmall, [X|SortedBig], Sorted).
+split(X, [], [], []).
+split(X, [Y|Tail], [Y|Small], Big) :-
+  longer_than(X, Y),
+  !,
+  split(X, Tail, Small, Big).
+split(X, [Y|Tail], Small, [Y|Big]) :-
+  split(X, Tail, Small, Big).
+
 % function that goes over the list to put a constrain
 % on the binary variable S, and returning the constrain,
 % 1 for true, 0 for false
@@ -105,10 +126,11 @@ proposition_calc([CF|Rest], S, CurrM, M) :-
 % M num of true propositions
 maxsat(NV, NC, D, F, S, M) :-
   create_formula(NV, NC, D, F),
+  sort_by_len(F, SortedF),
   length(S, NV),% variable logical domain
   S #:: 0..1,
   % Cost is the number of false propositions
   % -> optimizing the number of falses ->
   % means we have the most true propositions
-  bb_min(proposition_calc(F, S, 0, Cost), Cost, bb_options{strategy:restart, from:0}),
+  bb_min(proposition_calc(SortedF, S, 0, Cost), Cost, bb_options{strategy:restart, from:0}),
   M is NC - Cost.
