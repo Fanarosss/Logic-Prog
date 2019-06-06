@@ -5,6 +5,17 @@
 :- lib(ic).
 :- lib(branch_and_bound).
 
+% What I did is an implementation without search/6, where I find the optimum Cost
+% and the solution to achieve this. If I used search S would have only 0 and 1
+% With what I did, some values of S can have [0,1] which means, this variable doesn't
+% affect the overall truth whatever is its value.
+
+% I used quicksort, because propoitions with less variables, will have on their variables
+% more strong constraints -> [X1] can be true only if x1 is true.
+% When [x1,x2,-x3,x4] can have a lot of combinations that can lead to its truth.
+% So when the algorithm backtracks it will change first the values on the longer
+% propositions, and not to those who actually might have the optimal value from the start.
+
 % given code in order to create formula
 create_formula(NVars, NClauses, Density, Formula) :-
    formula(NVars, 1, NClauses, Density, Formula).
