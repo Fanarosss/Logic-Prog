@@ -5,6 +5,7 @@
 
 :- lib(ic).
 :- lib(branch_and_bound).
+:- lib(listut).
 
 % Knowledge Base:
 activity(a001, act(41,49)).
@@ -112,11 +113,35 @@ activity(a100, act(88,93)).
 %arguments: -CP|RP- List to recurse for all players
 %           -InitasP- Empty List
 %           -ASP- Result
-initASP([], _, []).
-initASP([CP|RP], InitASP, ASP) :-
+initASP([], _, Persons_ST, [], Persons_ST).
+initASP([CP|RP], InitASP, STList, ASP, Persons_ST) :-
+  append(STList, [0], NewSTList),
   append(InitASP, [CP-[]-0], TempASP),
-  initASP(RP, InitASP, RecASP),
+  initASP(RP, InitASP, NewSTList, RecASP, Persons_ST),
   append(TempASP, RecASP, ASP).
+
+
+assign_to_person(X, ActId, [CP-ActList-ST|RecASP], ASP) :-
+  X == CP,
+  activity(ActId, act(T0,T1)),
+  NewST is ST + T1 - T0,
+  append([ActId], ActList, NewActList),
+  append([CP-NewActList-NewST], RecASP, ASP).
+assign_to_person(X, ActId, [CP-ActList-ST|RecASP], ASP) :-
+  X =\= CP,
+  assign_to_person(X, ActId, RecASP, TempASP),
+  append([CP-ActList-ST], TempASP, ASP).
+
+convert_solution_to_ASP([], [], InitASP, InitASP).
+convert_solution_to_ASP([X|S], [ActId|L], InitASP, ASP) :-
+  convert_solution_to_ASP(S, L, InitASP, RecASP),
+  assign_to_person(X, ActId, RecASP, ASP).
+
+
+convert_solution_to_ASA([], [], []).
+convert_solution_to_ASA([X|S], [ActId|L], ASA) :-
+  convert_solution_to_ASA(S, L, RecASA),
+  append([ActId-X], RecASA, ASA).
 
 % total duration of Activities
 duration([], D, D).
@@ -124,6 +149,21 @@ duration([ActId|RestActivities], CurrentDuration, D) :-
   activity(ActId, act(T01, T02)),
   NewDuration is (CurrentDuration + (T02 - T01)),
   duration(RestActivities, NewDuration, D).
+
+% functions to keep the first NF
+iterate(_, _, [], []).
+iterate(CF, NF, [C|TempL], L) :-
+  CF < NF,
+  CNF is CF + 1,
+  iterate(CNF, NF, TempL, RecL),
+  append(RecL, [C], L).
+iterate(CF, NF, _, []) :-
+  CF >= NF.
+
+keep_first_NF(NF, TempL, L) :-
+  NF =\= 0,
+  iterate(0, NF, TempL, L).
+keep_first_NF(0, L, L).
 
 %between as used in class
 between(X1,X2,X1) :-
@@ -133,64 +173,43 @@ between(X1,X2,X) :-
   between(NewX1, X2, X).
 
 % custom sum
-my_sum(_, [], Cost, Cost).
-my_sum(A, [CP-ActList-Wi|RestASP], CurrentCost, Cost) :-
-  NewCost $= CurrentCost + (A - Wi)*(A - Wi),
-  my_sum(A, RestASP, NewCost, Cost).
-
-%arguments: -CP-ActList-ST- the form of ASP
-%           -CPId- Player ID
-%           -ActId- Activity ID that will be append
-%           -NewASP- updated list
-nested_append([CP-ActList-ST|RestCPs], CPId, ActId, NewASP) :-
-  %assignment segm
-  CP == CPId,
+my_sum(_, [], [], Sol, L, 0).
+my_sum(A, [X|S], [ActId|RestActivities], Sol, L, Cost) :-
+  my_sum(A, S, RestActivities, Sol, L, CurrCost),
   activity(ActId, act(T01, T02)),
-  NewST is ( ST + ( T02 - T01 )),
-  append(ActList, [ActId], NewActList),
-  append([CP-NewActList-NewST], RestCPs, NewASP).
-nested_append([CP-ActList-ST|RestCPs], CPId, ActId, NewASP) :-
-  %recursive segm
-  CP =\= CPId,
-  nested_append(RestCPs, CPId, ActId, RecursiveASP),
-  append([CP-ActList-ST], RecursiveASP, NewASP).
+  compute_st(X, Sol, L, T01, T02, 0, Wi),
+  Cost #= eval(CurrCost + (A - Wi)*(A - Wi)).
 
 
-nointerference(CP, STBound, Id, CP-[]-ST) :-
-  activity(Id, act(T01, T02)),
-  (( T02 - T01 )  + ST ) #=< STBound.
-nointerference(CP, STBound, Id, CP-[Id1|RestActivities]-ST) :-
-  activity(Id, act(T01, T02)),
-  activity(Id1, act(T11, T22)),
-  (( T01 < T11 , T02 < T11 ) ; ( T02 > T22 , T01 > T22 )),
-  nointerference(CP, STBound, Id, CP-RestActivities-ST).
+compute_st(_, [], [], _, _, ST, ST).
+compute_st(X, [CP|S], [ActId|L], T01, T02, CurrST, ST) :-
+  get_domain_size(CP,Size),
+  Size == 1,
+  X #= CP,
+  activity(ActId, act(T11, T12)),
+  NewST is CurrST + T12 - T11,
+  compute_st(X, S, L, T01, T02, NewST, ST).
+compute_st(X, [CP|S], [ActId|L], T01, T02, CurrST, ST) :-
+  get_domain_size(CP,Size),
+  Size == 1,
+  X #\= CP,
+  compute_st(X, S, L, T01, T02, CurrST, ST).
+compute_st(X, [CP|S], [ActId|L], T01, T02, CurrST, ST) :-
+  get_domain_size(CP,Size),
+  Size > 1,
+  compute_st(X, S, L, T01, T02, CurrST, ST).
 
-find_person_ASP(_, [], _).
-find_person_ASP(CP, [CPid-ActList-CPST|_], CP-ActList-CPST) :-
-  CP == CPid.
-find_person_ASP(CP, [CPid-_-_|ASP], TempASP) :-
-  CP =\= CPid,
-  find_person_ASP(CP, ASP, TempASP).
+test(X, ST, ActId, S, L) :-
+  activity(ActId, act(T01, T02)),
+  %compute current time of person
+  compute_st(X, S, L, T01, T02, 0, CurrST),
+  CurrST #=< ST.
 
-
-find_person([], _, _, _, _, _).
-find_person([CP|RestCPs], ASP, X, ST, ActId, NewASP) :-
-  find_person_ASP(CP, ASP, CP-ActList-CPST),
-  nointerference(CP, ST, ActId, CP-ActList-CPST),
-  nested_append(ASP, CP, ActId, NewASP),
-  X $= CP.
-find_person([CP|RestCPs], ASP, X, ST, ActId, NewASP) :-
-  find_person_ASP(CP, ASP, CP-ActList-CPST),
-  not nointerference(CP, ST, ActId, CP-ActList-CPST),
-  X $\= CP,
-  find_person(RestCPs, ASP, X, ST, ActId, NewASP).
-
-
-constraints(NewASP, [], _, [], NewASP).
-constraints(ASP, [X|S], ST, [ActId|L], RecASP) :-
-  get_domain_as_list(X, CPList),
-  find_person(CPList, ASP, X, ST, ActId, NewASP),
-  constraints(NewASP, S, ST, L, RecASP).
+constraints([], _, [], _, _).
+constraints([X|S], ST, [ActId|L], Sol, ActList) :-
+  indomain(X),
+  test(X, ST, ActId, Sol, ActList),
+  constraints(S, ST, L, Sol, ActList).
 
 
 assignment_csp(NP, ST, ASP, ASA) :-
@@ -199,32 +218,35 @@ assignment_csp(NP, ST, ASP, ASA) :-
   findall(Id, activity(Id, _), L),
   length(L,ActivityNum),
   findall(X, between(1, NP, X), ListOfNP),
-  initASP(ListOfNP, [], InitASP),
+  initASP(ListOfNP, [], [], InitASP, Persons_ST),
   length(S, ActivityNum), % variable logical domain
   S #:: 1..NP,
   % constraints:
   %   - person work time < ST
   %   - no activities interfering
-  constraints(InitASP, S, ST, L, ASP),
-  search(S, 0, occurence, indomain_middle, complete, []).
+  constraints(S, ST, L, S, L),
+  search(S, 0, occurence, indomain_middle, complete, []),
+  convert_solution_to_ASP(S, L, InitASP, ASP),
+  convert_solution_to_ASA(S, L, ASA).
   % convert solution to asa and exit
 
 assignment_opt(NF, NP, ST, F, T, ASP, ASA, Cost) :-
   % Findall(X, between(), L) gia na ftiaksw ti lista me ta activity
   % Example. L = [a01,a02,a03,a04,....]
-  findall(Id, activity(Id, _), L),
+  findall(Id, activity(Id, _), TempL),
+  keep_first_NF(NF, TempL, L),
   duration(L, 0, D),
   Afloat is round(D/NP),
   A is integer(Afloat),
   length(L,ActivityNum),
   findall(X, between(1, NP, X), ListOfNP),
-  initASP(ListOfNP, [], InitASP),
+  initASP(ListOfNP, [], [], InitASP, Persons_ST),
   length(S, ActivityNum), % variable logical domain
   S #:: 1..NP,
   % constraints:
   %   - person work time < ST
   %   - no activities interfering
-  constraints(InitASP, S, ST, L, ASP),
-  my_sum(A, ASP, 0, Cost),
-  bb_min(search(S, 0, occurence, indomain_middle, complete, []), Cost, bb_options{strategy:restart, timeout:T}).
+  bb_min((constraints(S, ST, L, S, L), my_sum(A, S, L, S, L, Cost)), Cost, bb_options{strategy:restart, factor:F, from: 0, timeout:T}),
+  convert_solution_to_ASP(S, L, InitASP, ASP),
+  convert_solution_to_ASA(S, L, ASA).
   % convert solution to asa and exit
